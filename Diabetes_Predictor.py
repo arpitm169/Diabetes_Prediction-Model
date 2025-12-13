@@ -1,18 +1,14 @@
 """
 TYPE 2 DIABETES DETECTION USING SUPPORT VECTOR MACHINE (SVM)
-WITH CUSTOM USER INPUT PREDICTION
+
 
 Dataset: PIMA Indians Diabetes Dataset
 
-Note:
-The dataset does not explicitly specify diabetes type.
-Due to adult population and insulin-resistance related features,
-this model is treated as Type 2 Diabetes detection.
 """
 
-# ===============================
+
 # 1. IMPORT LIBRARIES
-# ===============================
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,17 +25,15 @@ from sklearn.metrics import (
     roc_curve
 )
 
-# ===============================
+
 # 2. LOAD DATASET
-# ===============================
+
 df = pd.read_csv(r"C:\Users\HP-PC\Desktop\python\pima\diabetes.csv")
 
 print("Dataset shape:", df.shape)
 print(df.head())
 
-# ===============================
 # 3. DATA CLEANING
-# ===============================
 zero_as_missing_cols = [
     "Glucose",
     "BloodPressure",
@@ -56,18 +50,14 @@ print(df.isnull().sum())
 for col in zero_as_missing_cols:
     df[col].fillna(df[col].median(), inplace=True)
 
-# ===============================
 # 4. FEATURES AND TARGET
-# ===============================
 # Outcome:
 # 0 → No Type 2 Diabetes
 # 1 → Type 2 Diabetes Present
 X = df.drop("Outcome", axis=1)
 y = df["Outcome"]
 
-# ===============================
 # 5. TRAIN–TEST SPLIT
-# ===============================
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
@@ -76,16 +66,12 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-# ===============================
 # 6. FEATURE SCALING
-# ===============================
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# ===============================
 # 7. SVM MODEL + HYPERPARAMETER TUNING
-# ===============================
 param_grid = {
     "C": [0.1, 1, 10],
     "kernel": ["linear", "rbf"],
@@ -107,9 +93,7 @@ best_model = grid.best_estimator_
 
 print("\nBest SVM Parameters:", grid.best_params_)
 
-# ===============================
 # 8. MODEL EVALUATION
-# ===============================
 y_pred = best_model.predict(X_test_scaled)
 y_proba = best_model.predict_proba(X_test_scaled)[:, 1]
 
@@ -122,9 +106,7 @@ print(f"Test ROC AUC: {roc_auc:.4f}")
 print("\nConfusion Matrix:\n", cm)
 print("\nClassification Report:\n", classification_report(y_test, y_pred))
 
-# ===============================
 # 9. CONFUSION MATRIX PLOT
-# ===============================
 plt.figure(figsize=(5, 4))
 plt.imshow(cm, interpolation="nearest")
 plt.title("Confusion Matrix - Type 2 Diabetes")
@@ -151,9 +133,7 @@ plt.xlabel("Predicted Label")
 plt.tight_layout()
 plt.show()
 
-# ===============================
 # 10. ROC CURVE
-# ===============================
 fpr, tpr, _ = roc_curve(y_test, y_proba)
 
 plt.figure(figsize=(6, 5))
@@ -166,17 +146,13 @@ plt.legend(loc="lower right")
 plt.grid(alpha=0.3)
 plt.show()
 
-# ===============================
 # 11. SAVE MODEL & SCALER
-# ===============================
 joblib.dump(best_model, "svm_type2_diabetes_model.joblib")
 joblib.dump(scaler, "scaler_type2_diabetes.joblib")
 
 print("\nModel and scaler saved successfully.")
 
-# ===============================
 # 12. USER INPUT PREDICTION
-# ===============================
 def predict_type2_diabetes(user_input, model, scaler):
     """
     Predict Type 2 Diabetes for custom user input
@@ -219,3 +195,4 @@ result, prob = predict_type2_diabetes(user_data, best_model, scaler)
 
 print("\nPrediction Result:", result)
 print(f"Probability of Type 2 Diabetes: {prob * 100:.2f}%")
+

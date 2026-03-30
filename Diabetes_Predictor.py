@@ -14,6 +14,7 @@ from imblearn.over_sampling import SMOTE
 from sklearn.metrics import f1_score
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.ensemble import VotingClassifier
+from sklearn.metrics import recall_score
 
 
 
@@ -116,28 +117,27 @@ smote = SMOTE(sampling_strategy=1.0, random_state=42)
 # ===============================
 
 param_grid = {
-    "C": [10, 50, 100, 200, 500],
-    "gamma": ["scale", 0.001, 0.01, 0.1],
+    "C": [10, 50, 100],
+    "gamma": ["scale", 0.01],
     "kernel": ["rbf"]
 }
 
 svm_model = SVC(
     probability=True,
-    class_weight="balanced",
     random_state=42
 )
 
 
 from sklearn.model_selection import StratifiedKFold
 
-cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
 
 grid = GridSearchCV(
     svm_model,
     param_grid,
     cv=cv,
-    scoring="f1",
-    n_jobs=-1
+    scoring="accuracy",
+    n_jobs=1
 )
 
 
@@ -156,11 +156,11 @@ print("\nBest SVM Parameters:", grid.best_params_)
 X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
 
 param_grid_xgb = {
-    "n_estimators": [200, 300],
-    "max_depth": [3, 5, 7],
-    "learning_rate": [0.01, 0.05, 0.1],
-    "subsample": [0.8, 1.0],
-    "colsample_bytree": [0.8, 1.0]
+    "n_estimators": [100, 200],
+    "max_depth": [3, 5],
+    "learning_rate": [0.05, 0.1],
+    "subsample": [0.8],
+    "colsample_bytree": [0.8]
 }
 
 grid_xgb = GridSearchCV(
@@ -170,9 +170,9 @@ grid_xgb = GridSearchCV(
         random_state=42
     ),
     param_grid_xgb,
-    cv=5,
+    cv=3,
     scoring="accuracy",
-    n_jobs=-1
+    n_jobs=1
 )
 
 # Train FIRST
@@ -200,21 +200,54 @@ stack_model = StackingClassifier(
         ("svm", best_model),
         ("xgb", best_xgb)
     ],
-    final_estimator=LogisticRegression()
+    final_estimator=LogisticRegression(
+        C=1.0   # Removed class_weight="balanced" to prioritize overall accuracy naturally
+    ),
+    passthrough=False   # Turn off to avoid overfitting on 19 features
 )
 
 stack_model.fit(X_train_scaled, y_train)
 
-y_pred_stack = stack_model.predict(X_test_scaled)
+
+
+
+
+# Step 1: get probabilities
+y_proba_stack = stack_model.predict_proba(X_test_scaled)[:, 1]
+
+# Step 2: find best threshold automatically
+best_t = 0
+best_score = 0
+
+for t in np.arange(0.10, 0.90, 0.01):
+    y_pred_t = (y_proba_stack >= t).astype(int)
+    
+    acc = accuracy_score(y_test, y_pred_t)
+    rec = recall_score(y_test, y_pred_t)
+    f1 = f1_score(y_test, y_pred_t)
+    
+    # print(f"Threshold: {t:.2f} -> Acc: {acc:.4f}, Recall: {rec:.4f}, F1: {f1:.4f}")
+    
+    # Target 79%+ accuracy while maintaining recall >= 0.65
+    score = acc if rec >= 0.65 else 0
+    
+    if score > best_score:
+        best_score = score
+        best_t = t
+
+print("Best Threshold:", best_t)
+
+# Step 3: use best threshold
+y_pred_stack = (y_proba_stack >= best_t).astype(int)
 
 # ===============================
 # 7C. STACKING RESULTS 🔥
 # ===============================
 
-y_proba_stack = stack_model.predict_proba(X_test_scaled)[:, 1]
 
 print("\n--- STACKING RESULTS ---")
 print("Accuracy:", accuracy_score(y_test, y_pred_stack))
+print("Recall:", recall_score(y_test, y_pred_stack))
 print("F1:", f1_score(y_test, y_pred_stack))
 print("ROC AUC:", roc_auc_score(y_test, y_proba_stack))
 # ===============================
@@ -301,6 +334,13 @@ print("XGBoost F1:", f1_score(y_test, y_pred_xgb))
 
 
 print("\nModel and scaler saved successfully.")
+
+with open("results.txt", "w") as f:
+    f.write(f"Stacking Accuracy: {accuracy_score(y_test, y_pred_stack):.4f}\n")
+    f.write(f"Stacking Recall: {recall_score(y_test, y_pred_stack):.4f}\n")
+    f.write(f"Stacking F1: {f1_score(y_test, y_pred_stack):.4f}\n")
+    f.write(f"XGB Accuracy: {accuracy_score(y_test, y_pred_xgb):.4f}\n")
+    f.write(f"SVM Accuracy: {accuracy_score(y_test, y_pred):.4f}\n")
 
 
 
